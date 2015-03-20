@@ -1,2 +1,2 @@
-# SlackVote
-Add a basic voting or polling integration to slack channels
+# SlackPoll
+Add a basic polling integration to slack channels
