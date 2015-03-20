@@ -1,14 +1,18 @@
 __author__ = 'jhroyal'
 
 import json
-import requests
-import yaml
 import logging as log
 import sys
 import os
+import traceback
+import re
+
+import requests
+import yaml
 from flask import Flask
 from flask import request
-import traceback
+
+from Poll import PollingMachine
 
 
 app = Flask(__name__)
@@ -18,12 +22,40 @@ env = dict()
 def vote_command():
     if request.method == "GET":
         return "The voting machine is up and running"
-    requested = request.form["text"]
-    user = request.form["user_name"]
+
     token = request.form["token"]
     if env["SLACK_TOKEN"] != token:
         return "Invalid slack token."
+
     try:
+        pm = env["POLLS"]
+
+
+        requested = request.form["text"]
+        user = request.form["user_name"]
+        channel = request.form["channel_name"]
+        if "help" in requested:
+            return "*Help for /poll*\n\n" \
+                   "*Start a poll:* `/poll topic \"What's for lunch?\" options sushi --- pizza --- Anything but burgers`\n" \
+                   "*End a poll:* /poll stop (The original poll creator must run this"
+
+        if "topic" in requested and "options" in requested:
+            print "Creating a new poll"
+            topic_match = re.search("topic (.+) options", requested)
+            if topic_match:
+                topic = topic_match.group(1)
+            else:
+                return "Malformed Request. Use `/poll help` to find out how to form the request."
+
+            options_match = re.search("options (.*)", requested)
+            if options_match:
+                options = {x.strip(): 0 for x in options_match.group(1).split("---")}
+            else:
+                return "Malformed Request. Use `/poll help` to find out how to form the request."
+            pm.create_poll(user, channel, topic, options)
+            print "PM "+str(pm)
+            return "Creating a new poll"
+            #
         return "Vote POST request recieved"
     except requests.exceptions.ReadTimeout:
         return "Request timed out :("
@@ -75,6 +107,7 @@ if __name__ == "__main__":
             env["HOST"] = '0.0.0.0'
             env["PORT"] = os.getenv('VCAP_APP_PORT', '5000')
 
+        env["POLLS"] = PollingMachine()
     except Exception as e:
             log.error("Failed to load the environment \n %s" % e)
             sys.exit(2)
