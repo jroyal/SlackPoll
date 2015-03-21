@@ -34,12 +34,16 @@ class PollingMachine():
         self.active_polls = dict()
 
     def create_poll(self, user, channel, topic, options):
+        if channel in self.active_polls:
+            return None
         poll = Poll(user, channel, topic, options)
         self.active_polls[channel] = poll
         return poll
 
-    def close_poll(self, channel):
+    def close_poll(self, user, channel):
         if channel in self.active_polls:
+            if self.active_polls[channel].original_user != user:
+                return "You can not close this poll. Only the original creator can close the poll."
             return self.active_polls.pop(channel)
         else:
             return "There is no current active poll to close!"
@@ -57,7 +61,7 @@ class PollingMachine():
         if channel in self.active_polls:
             return self.active_polls[channel].num_casted_votes
         else:
-            return "There is no current active poll!"
+            return None
 
     def __str__(self):
         output = ""

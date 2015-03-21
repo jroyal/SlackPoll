@@ -30,7 +30,6 @@ def vote_command():
     try:
         pm = env["POLLS"]
 
-
         requested = request.form["text"]
         user = request.form["user_name"]
         channel = request.form["channel_name"]
@@ -65,13 +64,18 @@ def vote_command():
                 return pm.vote(channel, vote)
 
         elif "count" in requested:
-            return "There have been %s votes cast so far." % (pm.get_num_of_casted_votes(channel))
+            num = pm.get_num_of_casted_votes(channel)
+            if num:
+                return "There have been %s votes cast so far." % num
+            else:
+                return "There is no current active poll!"
 
         elif "close" in requested:
             poll = pm.close_poll(channel)
             send_poll_close(env["SLACK_ERROR_URL"], poll)
 
-        return "Vote POST request recieved"
+        else:
+            return "Unknown request recieved"
     except requests.exceptions.ReadTimeout:
         return "Request timed out :("
     except Exception as e:
