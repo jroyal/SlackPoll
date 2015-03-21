@@ -55,6 +55,7 @@ def vote_command():
             poll = pm.create_poll(user, channel, topic, options)
             if poll:
                 send_poll_start(env["SLACK_ERROR_URL"], poll)
+                return "Creating poll..."
             else:
                 return "There is an active poll in this channel already!"
 
@@ -73,9 +74,10 @@ def vote_command():
                 return "There is no current active poll!"
 
         elif "close" in requested:
-            poll = pm.close_poll(channel)
+            poll = pm.close_poll(user, channel)
             if isinstance(poll, Poll):
                 send_poll_close(env["SLACK_ERROR_URL"], poll)
+                return "Closing poll..."
             else:
                 return poll
 
