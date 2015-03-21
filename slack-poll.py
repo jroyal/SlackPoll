@@ -12,7 +12,7 @@ import yaml
 from flask import Flask
 from flask import request
 
-from Poll import PollingMachine
+from Poll import PollingMachine, Poll
 
 
 app = Flask(__name__)
@@ -53,8 +53,10 @@ def vote_command():
             else:
                 return "Malformed Request. Use `/poll help` to find out how to form the request."
             poll = pm.create_poll(user, channel, topic, options)
-            print "PM "+str(pm)
-            send_poll_start(env["SLACK_ERROR_URL"], poll)
+            if poll:
+                send_poll_start(env["SLACK_ERROR_URL"], poll)
+            else:
+                return "There is an active poll in this channel already!"
 
         elif "cast" in requested:
             print "Casting a vote"
@@ -72,7 +74,10 @@ def vote_command():
 
         elif "close" in requested:
             poll = pm.close_poll(channel)
-            send_poll_close(env["SLACK_ERROR_URL"], poll)
+            if isinstance(poll, Poll):
+                send_poll_close(env["SLACK_ERROR_URL"], poll)
+            else:
+                return poll
 
         else:
             return "Unknown request recieved"
