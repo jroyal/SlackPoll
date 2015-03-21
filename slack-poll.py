@@ -36,8 +36,9 @@ def vote_command():
         channel = request.form["channel_name"]
         if "help" in requested:
             return "*Help for /poll*\n\n" \
-                   "*Start a poll:* `/poll topic \"What's for lunch?\" options sushi --- pizza --- Anything but burgers`\n" \
-                   "*End a poll:* /poll stop (The original poll creator must run this"
+                   "*Start a poll:* `/poll topic What's for lunch? options sushi --- pizza --- Anything but burgers`\n" \
+                   "*End a poll:* `/poll close` (The original poll creator must run this\n" \
+                   "*Get number of votes:* `/poll count`"
 
         if "topic" in requested and "options" in requested:
             print "Creating a new poll"
@@ -52,10 +53,24 @@ def vote_command():
                 options = {x.strip(): 0 for x in options_match.group(1).split("---")}
             else:
                 return "Malformed Request. Use `/poll help` to find out how to form the request."
-            pm.create_poll(user, channel, topic, options)
+            poll = pm.create_poll(user, channel, topic, options)
             print "PM "+str(pm)
-            return "Creating a new poll"
-            #
+            send_poll_start(env["SLACK_ERROR_URL"], poll)
+
+        elif "cast" in requested:
+            print "Casting a vote"
+            vote = re.search('([0-9]+)', requested)
+            if vote:
+                vote = vote.group(1)
+                return pm.vote(channel, vote)
+
+        elif "count" in requested:
+            return "There have been %s votes cast so far." % (pm.get_num_of_casted_votes(channel))
+
+        elif "close" in requested:
+            poll = pm.close_poll(channel)
+            send_poll_close(env["SLACK_ERROR_URL"], poll)
+
         return "Vote POST request recieved"
     except requests.exceptions.ReadTimeout:
         return "Request timed out :("
@@ -65,6 +80,58 @@ def vote_command():
             send_message_to_admin(env["SLACK_ERROR_URL"], env["SLACK_ERROR_CHANNEL"], user, requested, traceback.format_exc())
         return "Oh no! Something went wrong!"
 
+
+def send_poll_start(url, poll):
+    payload = {
+        "channel": poll.channel,
+        "text": "%s created a new poll! Vote in it!" % poll.original_user,
+        "attachments": [
+            {
+                "fallback": "%s created a new poll! Vote in it!" % poll.original_user,
+
+                "color": "good",
+                "mrkdwn_in": ["fields", "text"],
+                "fields": [
+                    {
+                        "title": poll.topic,
+                        "value": ""
+                    }
+                ]
+            }
+        ]
+    }
+    for index, option in enumerate(poll.option_val_key):
+        payload["attachments"][0]["fields"][0]["value"] += "><%s> %s\n" % (index + 1, option)
+
+    payload["attachments"][0]["fields"][0]["value"] += "\n\nHow do I vote? `/poll cast [option number]`"
+    print ("Sending an update to slack")
+    requests.post(url, data=json.dumps(payload))
+
+
+def send_poll_close(url, poll):
+    payload = {
+        "channel": poll.channel,
+        "text": "%s closed their poll!" % poll.original_user,
+        "attachments": [
+            {
+                "fallback": "%s closed their poll!" % poll.original_user,
+
+                "color": "danger",
+                "mrkdwn_in": ["fields", "text"],
+                "fields": [
+                    {
+                        "title": poll.topic,
+                        "value": ""
+                    }
+                ]
+            }
+        ]
+    }
+    for option in poll.option_val_key:
+        payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % (option, poll.options[option])
+
+    print ("Sending an update to slack")
+    requests.post(url, data=json.dumps(payload))
 
 def send_message_to_admin(url, channel, user, call, stacktrace):
     payload = {
