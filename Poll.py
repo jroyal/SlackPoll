@@ -1,5 +1,8 @@
 __author__ = 'jhroyal'
 import json
+import requests
+from threading import Timer
+from operator import itemgetter
 
 
 class Poll:
@@ -30,12 +33,19 @@ class Poll:
 
 
 class PollingMachine():
-    def __init__(self):
+    def __init__(self, url):
         self.active_polls = dict()
+        self.url = url
 
-    def create_poll(self, user, channel, topic, options):
+    def create_poll(self, user, channel, topic, options, timeout=None):
         if channel in self.active_polls:
             return None
+
+        if timeout:
+            timeout = int(timeout)
+            t = Timer(timeout, self.close_poll, [user, channel])
+            t.start()
+
         poll = Poll(user, channel, topic, options)
         self.active_polls[channel] = poll
         return poll
@@ -44,7 +54,8 @@ class PollingMachine():
         if channel in self.active_polls:
             if self.active_polls[channel].original_user != user:
                 return "You can not close this poll. Only the original creator can close the poll."
-            return self.active_polls.pop(channel)
+            self.send_poll_close(self.active_polls.pop(channel))
+            return "Closing poll..."
         else:
             return "There is no current active poll to close!"
 
@@ -68,3 +79,29 @@ class PollingMachine():
         for poll in self.active_polls:
             output += str(self.active_polls[poll])
         return output
+
+    def send_poll_close(self, poll):
+        payload = {
+            "channel": poll.channel,
+            "text": "%s closed their poll!" % poll.original_user,
+            "attachments": [
+                {
+                    "fallback": "%s closed their poll!" % poll.original_user,
+
+                    "color": "danger",
+                    "mrkdwn_in": ["fields", "text"],
+                    "fields": [
+                        {
+                            "title": poll.topic,
+                            "value": ""
+                        }
+                    ]
+                }
+            ]
+        }
+        sort = sorted(poll.options.items(), key=itemgetter(1), reverse=True)
+        for option, votes in sort:
+            payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % (option, votes)
+
+        print ("Sending an update to slack")
+        requests.post(self.url, data=json.dumps(payload))

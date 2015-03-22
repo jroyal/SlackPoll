@@ -35,7 +35,7 @@ def vote_command():
         channel = request.form["channel_name"]
         if "help" in requested:
             return "*Help for /poll*\n\n" \
-                   "*Start a poll:* `/poll topic What's for lunch? options sushi --- pizza --- Anything but burgers`\n" \
+                   "*Start a poll:* `/poll timeout 5 topic What's for lunch? options sushi --- pizza --- Anything but burgers`\n" \
                    "*End a poll:* `/poll close` (The original poll creator must run this\n" \
                    "*Get number of votes:* `/poll count`"
 
@@ -52,7 +52,14 @@ def vote_command():
                 options = {x.strip(): 0 for x in options_match.group(1).split("---")}
             else:
                 return "Malformed Request. Use `/poll help` to find out how to form the request."
-            poll = pm.create_poll(user, channel, topic, options)
+
+            timeout_match = re.search("timeout (\d*)", requested)
+            if timeout_match:
+                timeout = timeout_match.group(1)
+                poll = pm.create_poll(user, channel, topic, options, timeout)
+            else:
+                poll = pm.create_poll(user, channel, topic, options)
+
             if poll:
                 send_poll_start(env["SLACK_ERROR_URL"], poll)
                 return "Creating poll..."
@@ -74,12 +81,8 @@ def vote_command():
                 return "There is no current active poll!"
 
         elif "close" in requested:
-            poll = pm.close_poll(user, channel)
-            if isinstance(poll, Poll):
-                send_poll_close(env["SLACK_ERROR_URL"], poll)
-                return "Closing poll..."
-            else:
-                return poll
+            output = pm.close_poll(user, channel)
+            return output
 
         else:
             return "Unknown request recieved"
@@ -118,31 +121,6 @@ def send_poll_start(url, poll):
     print ("Sending an update to slack")
     requests.post(url, data=json.dumps(payload))
 
-
-def send_poll_close(url, poll):
-    payload = {
-        "channel": poll.channel,
-        "text": "%s closed their poll!" % poll.original_user,
-        "attachments": [
-            {
-                "fallback": "%s closed their poll!" % poll.original_user,
-
-                "color": "danger",
-                "mrkdwn_in": ["fields", "text"],
-                "fields": [
-                    {
-                        "title": poll.topic,
-                        "value": ""
-                    }
-                ]
-            }
-        ]
-    }
-    for option in poll.option_val_key:
-        payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % (option, poll.options[option])
-
-    print ("Sending an update to slack")
-    requests.post(url, data=json.dumps(payload))
 
 def send_message_to_admin(url, channel, user, call, stacktrace):
     payload = {
@@ -185,7 +163,7 @@ if __name__ == "__main__":
             env["HOST"] = '0.0.0.0'
             env["PORT"] = os.getenv('VCAP_APP_PORT', '5000')
 
-        env["POLLS"] = PollingMachine()
+        env["POLLS"] = PollingMachine(env["SLACK_ERROR_URL"])
     except Exception as e:
             log.error("Failed to load the environment \n %s" % e)
             sys.exit(2)
