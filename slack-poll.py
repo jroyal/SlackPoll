@@ -103,10 +103,11 @@ def vote_command():
 def send_poll_start(url, poll):
     payload = {
         "channel": poll.channel,
-        "text": "%s created a new poll! Vote in it!" % poll.original_user,
+        "text": "@%s created a new poll! Vote in it!" % poll.original_user,
+        "link_names": 1,
         "attachments": [
             {
-                "fallback": "%s created a new poll! Vote in it!" % poll.original_user,
+                "fallback": "@%s created a new poll! Vote in it!" % poll.original_user,
 
                 "color": "good",
                 "mrkdwn_in": ["fields", "text"],

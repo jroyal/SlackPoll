@@ -89,10 +89,11 @@ class PollingMachine():
     def send_poll_close(self, poll):
         payload = {
             "channel": poll.channel,
-            "text": "%s closed their poll!" % poll.original_user,
+            "text": "@%s closed their poll!" % poll.original_user,
+            "link_names": 1,
             "attachments": [
                 {
-                    "fallback": "%s closed their poll!" % poll.original_user,
+                    "fallback": "@%s closed their poll!" % poll.original_user,
 
                     "color": "danger",
                     "mrkdwn_in": ["fields", "text"],
