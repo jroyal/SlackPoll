@@ -33,6 +33,7 @@ def vote_command():
         requested = request.form["text"]
         user = request.form["user_name"]
         channel = request.form["channel_name"]
+        log.debug(channel)
         if "help" in requested:
             return "*Help for /poll*\n\n" \
                    "*Start a poll:* `/poll timeout 5 topic What's for lunch? options sushi --- pizza --- Anything but burgers`\n" \
@@ -62,6 +63,7 @@ def vote_command():
 
             if poll:
                 send_poll_start(env["SLACK_ERROR_URL"], poll)
+                log.info(pm)
                 return "Creating poll..."
             else:
                 return "There is an active poll in this channel already!"
@@ -118,7 +120,7 @@ def send_poll_start(url, poll):
         payload["attachments"][0]["fields"][0]["value"] += "><%s> %s\n" % (index + 1, option)
 
     payload["attachments"][0]["fields"][0]["value"] += "\n\nHow do I vote? `/poll cast [option number]`"
-    print ("Sending an update to slack")
+    log.info("Sending an update to slack")
     requests.post(url, data=json.dumps(payload))
 
 
