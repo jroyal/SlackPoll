@@ -76,7 +76,7 @@ def vote_command():
             vote = re.search('([0-9]+)', requested)
             if vote:
                 vote = vote.group(1)
-                return pm.vote(channel, vote)
+                return pm.vote(channel, user, vote)
 
         elif "count" in requested:
             num = pm.get_num_of_casted_votes(channel)
