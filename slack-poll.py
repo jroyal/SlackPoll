@@ -32,7 +32,10 @@ def vote_command():
 
         requested = request.form["text"]
         user = request.form["user_name"]
-        channel = request.form["channel_id"]
+        if "channel_id" in request.form:
+            channel = request.form["channel_id"]
+        else:
+            channel = request.form["channel_name"]
         log.debug(channel)
         if "help" in requested:
             return "*Help for /poll*\n\n" \
