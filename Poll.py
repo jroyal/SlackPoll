@@ -12,18 +12,24 @@ class Poll:
         self.topic = topic
         self.options = options
         self.option_val_key = []
+        self.votes = dict()
         for item in self.options:
             self.option_val_key.append(item)
         self.num_casted_votes = 0
         self.poll_open = True
 
-    def cast_vote(self, key):
-        key = int(key)
+    def cast_vote(self, user, key):
         print "Cast vote: %s" % key
-        if key <= 0 or key > len(self.option_val_key):
+        if int(key) <= 0 or int(key) > len(self.option_val_key):
             return False
 
         item = self.option_val_key[int(key) - 1]
+        if user in self.votes:
+            original_vote = self.votes[user]
+            self.options[original_vote] -= 1
+            self.num_casted_votes -= 1
+
+        self.votes[user] = item
         self.options[item] += 1
         self.num_casted_votes += 1
         return True
@@ -59,9 +65,9 @@ class PollingMachine():
         else:
             return "There is no current active poll to close!"
 
-    def vote(self, channel, vote):
+    def vote(self, channel, user, vote):
         if channel in self.active_polls:
-            if self.active_polls[channel].cast_vote(vote):
+            if self.active_polls[channel].cast_vote(user, vote):
                 return "Vote received. Thank you!"
             else:
                 return "That wasn't a valid voting option!"
