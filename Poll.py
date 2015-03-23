@@ -49,7 +49,7 @@ class PollingMachine():
 
         if timeout:
             timeout = int(timeout)
-            t = Timer(timeout, self.close_poll, [user, channel])
+            t = Timer(timeout * 60, self.close_poll, [user, channel])
             t.start()
 
         poll = Poll(user, channel, topic, options)
