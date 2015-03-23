@@ -1,6 +1,7 @@
 __author__ = 'jhroyal'
 import json
 import requests
+import logging as log
 from threading import Timer
 from operator import itemgetter
 
@@ -15,7 +16,7 @@ class Poll:
         self.num_casted_votes = 0
 
     def cast_vote(self, user, key):
-        print "Cast vote: %s" % key
+        log.debug("Cast vote: %s" % key)
         key = int(key) - 1
         if key < 0 or key >= len(self.options):
             return False
@@ -103,10 +104,9 @@ class PollingMachine():
             ]
         }
         sort = sorted(poll.options, key=itemgetter('count'), reverse=True)
-        print sort
         for option in sort:
-            payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % (
-            option["name"], option["count"])
+            payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % \
+                                                               (option["name"], option["count"])
 
-        print ("Sending an update to slack")
+        log.debug("Sending an update to slack")
         requests.post(self.url, data=json.dumps(payload))

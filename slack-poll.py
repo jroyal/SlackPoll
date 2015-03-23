@@ -44,7 +44,7 @@ def vote_command():
                    "*Get number of votes:* `/poll count`"
 
         if "topic" in requested and "options" in requested:
-            print "Creating a new poll"
+            log.info("Creating a new poll")
             topic_match = re.search("topic (.+) options", requested)
             if topic_match:
                 topic = topic_match.group(1)
@@ -65,14 +65,14 @@ def vote_command():
                 poll = pm.create_poll(user, channel, topic, options)
 
             if poll:
-                send_poll_start(env["SLACK_ERROR_URL"], poll)
+                send_poll_start(env["SLACK_URL"], poll)
                 log.info(pm)
                 return "Creating poll..."
             else:
                 return "There is an active poll in this channel already!"
 
         elif "cast" in requested:
-            print "Casting a vote"
+            log.info("Casting a vote")
             vote = re.search('([0-9]+)', requested)
             if vote:
                 vote = vote.group(1)
@@ -95,8 +95,8 @@ def vote_command():
         return "Request timed out :("
     except Exception as e:
         log.error(traceback.format_exc())
-        if "SLACK_ERROR_URL" in env and "SLACK_ERROR_CHANNEL" in env:
-            send_message_to_admin(env["SLACK_ERROR_URL"], env["SLACK_ERROR_CHANNEL"], user, requested, traceback.format_exc())
+        if "SLACK_URL" in env and "SLACK_ERROR_CHANNEL" in env:
+            send_message_to_admin(env["SLACK_URL"], env["SLACK_ERROR_CHANNEL"], user, requested, traceback.format_exc())
         return "Oh no! Something went wrong!"
 
 
@@ -164,14 +164,13 @@ if __name__ == "__main__":
         else:
             log.info("Loading environment variables from Bluemix")
             env["SLACK_TOKEN"] = os.getenv("SLACK_TOKEN")
-            env["SLACK_ERROR_URL"] = os.getenv("SLACK_ERROR_URL")
+            env["SLACK_URL"] = os.getenv("SLACK_URL")
             env["SLACK_ERROR_CHANNEL"] = os.getenv("SLACK_ERROR_CHANNEL")
             env["HOST"] = '0.0.0.0'
             env["PORT"] = os.getenv('VCAP_APP_PORT', '5000')
 
-        env["POLLS"] = PollingMachine(env["SLACK_ERROR_URL"])
+        env["POLLS"] = PollingMachine(env["SLACK_URL"])
     except Exception as e:
             log.error("Failed to load the environment \n %s" % e)
             sys.exit(2)
-    print env
     app.run(host=env["HOST"], port=env["PORT"])
