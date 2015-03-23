@@ -53,7 +53,7 @@ def vote_command():
 
             options_match = re.search("options (.*)", requested)
             if options_match:
-                options = {x.strip(): 0 for x in options_match.group(1).split("---")}
+                options = [{"name": x.strip(), "count": 0} for x in options_match.group(1).split("---")]
             else:
                 return "Malformed Request. Use `/poll help` to find out how to form the request."
 
@@ -120,8 +120,8 @@ def send_poll_start(url, poll):
             }
         ]
     }
-    for index, option in enumerate(poll.option_val_key):
-        payload["attachments"][0]["fields"][0]["value"] += "><%s> %s\n" % (index + 1, option)
+    for index, option in enumerate(poll.options):
+        payload["attachments"][0]["fields"][0]["value"] += "><%s> %s\n" % (index + 1, option["name"])
 
     payload["attachments"][0]["fields"][0]["value"] += "\n\nHow do I vote? `/poll cast [option number]`"
     log.info("Sending an update to slack")

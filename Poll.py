@@ -11,26 +11,22 @@ class Poll:
         self.channel = channel
         self.topic = topic
         self.options = options
-        self.option_val_key = []
         self.votes = dict()
-        for item in self.options:
-            self.option_val_key.append(item)
         self.num_casted_votes = 0
-        self.poll_open = True
 
     def cast_vote(self, user, key):
         print "Cast vote: %s" % key
-        if int(key) <= 0 or int(key) > len(self.option_val_key):
+        key = int(key) - 1
+        if key < 0 or key >= len(self.options):
             return False
 
-        item = self.option_val_key[int(key) - 1]
         if user in self.votes:
             original_vote = self.votes[user]
-            self.options[original_vote] -= 1
+            self.options[original_vote]["count"] -= 1
             self.num_casted_votes -= 1
 
-        self.votes[user] = item
-        self.options[item] += 1
+        self.votes[user] = key
+        self.options[key]["count"] += 1
         self.num_casted_votes += 1
         return True
 
@@ -106,9 +102,11 @@ class PollingMachine():
                 }
             ]
         }
-        sort = sorted(poll.options.items(), key=itemgetter(1), reverse=True)
-        for option, votes in sort:
-            payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % (option, votes)
+        sort = sorted(poll.options, key=itemgetter('count'), reverse=True)
+        print sort
+        for option in sort:
+            payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % (
+            option["name"], option["count"])
 
         print ("Sending an update to slack")
         requests.post(self.url, data=json.dumps(payload))
