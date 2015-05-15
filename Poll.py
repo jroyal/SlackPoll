@@ -105,7 +105,7 @@ class PollingMachine():
         }
         sort = sorted(poll.options, key=itemgetter('count'), reverse=True)
         for option in sort:
-            payload["attachments"][0]["fields"][0]["value"] += ">*%s* recieved %s votes.\n" % \
+            payload["attachments"][0]["fields"][0]["value"] += ">*%s* received %s votes.\n" % \
                                                                (option["name"], option["count"])
 
         log.debug("Sending an update to slack")
