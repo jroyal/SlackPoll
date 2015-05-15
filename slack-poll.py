@@ -83,6 +83,8 @@ def vote_command():
             num = pm.get_num_of_casted_votes(channel)
             if num:
                 return "There have been %s votes cast so far." % num
+            elif num == 0:
+                return "Nobody has voted yet :("
             else:
                 return "There is no current active poll!"
 
