@@ -40,7 +40,8 @@ def vote_command():
         if "help" in requested:
             return "*Help for /poll*\n\n" \
                    "*Start a poll:* `/poll timeout 5 topic What's for lunch? options sushi --- pizza --- Anything but burgers`\n" \
-                   "*End a poll:* `/poll close` (The original poll creator must run this\n" \
+                   "*End a poll:* `/poll close` (The original poll creator must run this)\n" \
+                   "*Cast a Vote:* `/poll cast [option number]`\n" \
                    "*Get number of votes:* `/poll count`"
 
         if "topic" in requested and "options" in requested:
