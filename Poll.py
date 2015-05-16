@@ -36,9 +36,10 @@ class Poll:
 
 
 class PollingMachine():
-    def __init__(self, url):
+    def __init__(self, url, token):
         self.active_polls = dict()
         self.url = url
+        self.token = token
 
     def create_poll(self, user, channel, topic, options, timeout=None):
         if channel in self.active_polls:

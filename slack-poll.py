@@ -6,7 +6,7 @@ import sys
 import os
 import traceback
 import re
-
+import cloudant
 import requests
 import yaml
 from flask import Flask
@@ -16,7 +16,7 @@ from Poll import PollingMachine, Poll
 
 
 app = Flask(__name__)
-env = dict()
+
 
 @app.route('/', methods=['GET', 'POST'])
 def vote_command():
@@ -24,11 +24,23 @@ def vote_command():
         return "The voting machine is up and running"
 
     token = request.form["token"]
-    if env["SLACK_TOKEN"] != token:
-        return "Invalid slack token."
+    requested = request.form["text"]
+
+    if "register" in requested:
+        if token in env:
+            return "This slack account has already been registered by this application."
+        command = requested.split(" ")
+        slack_url = command[1]
+        slack_token = command[2]
+        register(slack_url, slack_token)
+        return "You have successfully registered this slack account."
+
+    if token not in env:
+        return "This Slack Account hasn't been registered with the polling application.\n" \
+               "Please run `/poll register [incoming webhook url] [slash command token]`"
 
     try:
-        pm = env["POLLS"]
+        pm = env[token]
 
         requested = request.form["text"]
         user = request.form["user_name"]
@@ -66,7 +78,7 @@ def vote_command():
                 poll = pm.create_poll(user, channel, topic, options)
 
             if poll:
-                send_poll_start(env["SLACK_URL"], poll)
+                send_poll_start(pm.url, poll)
                 log.info(pm)
                 return "Creating poll..."
             else:
@@ -98,9 +110,50 @@ def vote_command():
         return "Request timed out :("
     except Exception as e:
         log.error(traceback.format_exc())
-        if "SLACK_URL" in env and "SLACK_ERROR_CHANNEL" in env:
-            send_message_to_admin(env["SLACK_URL"], env["SLACK_ERROR_CHANNEL"], user, requested, traceback.format_exc())
+        if "SLACK_ERROR_CHANNEL" in env:
+            send_message_to_admin(pm.url, env["SLACK_ERROR_CHANNEL"], user, requested, traceback.format_exc())
         return "Oh no! Something went wrong!"
+
+
+def register(slack_url, slack_token):
+    """
+    Register new slack accounts with the polling application
+
+    Adds the new Polling Machine object to the env dict using the token as the key
+    :param slack_url: The URL for the incoming web hook for the slack account
+    :param slack_token: The token for slash command used by the slack account
+    """
+    global env
+    print slack_url
+    print slack_token
+    polling_machine = PollingMachine(slack_url, slack_token)
+    env[slack_token] = polling_machine
+
+
+def connect_to_db():
+    cloudant_info_json = json.loads(os.getenv("VCAP_SERVICES"))
+    credentials = cloudant_info_json["cloudantNoSQLDB"][0]["credentials"]
+
+    print credentials
+
+    account = cloudant.Account(credentials["username"])
+
+    login = account.login(credentials["username"], credentials["password"])
+    if login.status_code != 200:
+        return "Failed to connect to the Cloudant DB"
+
+    db = account.database("test")
+    print type(db)
+    db.put()
+    #db['hello_world'] = {'herp': 'derp'}
+    for doc in db.all_docs():
+        print doc
+
+    for data in account.all_dbs():
+        print data
+
+    print db['hello_world'].get().json()
+
 
 
 def send_poll_start(url, poll):
@@ -155,25 +208,17 @@ def send_message_to_admin(url, channel, user, call, stacktrace):
     requests.post(url, data=json.dumps(payload))
 
 if __name__ == "__main__":
-    log.basicConfig(filename='slack-vote.log', level=log.DEBUG, format='%(asctime)s %(levelname)s:%(message)s',
-                    datefmt='%m/%d/%Y %H:%M:%S')
     global env
+    env = dict()
     try:
         if len(sys.argv) > 1 and sys.argv[1] == "local":
-            log.info("Try loading from a local env.yaml file")
-            env = yaml.load(file("env.yaml"))
             env["HOST"] = 'localhost'
             env["PORT"] = 5000
         else:
-            log.info("Loading environment variables from Bluemix")
-            env["SLACK_TOKEN"] = os.getenv("SLACK_TOKEN")
-            env["SLACK_URL"] = os.getenv("SLACK_URL")
-            env["SLACK_ERROR_CHANNEL"] = os.getenv("SLACK_ERROR_CHANNEL")
             env["HOST"] = '0.0.0.0'
             env["PORT"] = os.getenv('VCAP_APP_PORT', '5000')
-
-        env["POLLS"] = PollingMachine(env["SLACK_URL"])
     except Exception as e:
-            log.error("Failed to load the environment \n %s" % e)
+            print "Failed to load the environment \n %s" % e
             sys.exit(2)
+    connect_to_db()
     app.run(host=env["HOST"], port=env["PORT"])
