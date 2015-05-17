@@ -123,38 +123,56 @@ def register(slack_url, slack_token):
     :param slack_url: The URL for the incoming web hook for the slack account
     :param slack_token: The token for slash command used by the slack account
     """
-    global env
+    global cloudant_db
     print slack_url
     print slack_token
-    polling_machine = PollingMachine(slack_url, slack_token)
-    env[slack_token] = polling_machine
+    account = {slack_token: {'url': slack_url}}
+    db = cloudant_db.database(slack_token)
+    resp = db.put()
+    db['url'] = slack_url
+    if resp.status_code == 412:
+        return "This slack account is already registered."
+    elif resp.status_code == 201:
+        return "This slack account has be successfully registered."
+    else:
+        return "Registration failed."
 
 
-def connect_to_db():
+
+def verify_token():
+    pass
+
+
+def connect_to_cloudant():
+    print os.getenv("VCAP_SERVICES")
     cloudant_info_json = json.loads(os.getenv("VCAP_SERVICES"))
     credentials = cloudant_info_json["cloudantNoSQLDB"][0]["credentials"]
 
     print credentials
+    global cloudant_db
+    cloudant_db = cloudant.Account(credentials["username"])
 
-    account = cloudant.Account(credentials["username"])
-
-    login = account.login(credentials["username"], credentials["password"])
+    login = cloudant_db.login(credentials["username"], credentials["password"])
     if login.status_code != 200:
         return "Failed to connect to the Cloudant DB"
 
-    db = account.database("test")
-    print type(db)
-    db.put()
-    #db['hello_world'] = {'herp': 'derp'}
+
+def test():
+    global cloudant_db
+    db = cloudant_db.database("test")
+    result = db.put()
+    doc = db['account_info'].get().json()
+    print doc["_rev"]
+    print increment_rev(doc["_rev"])
+    db['account_info'] = {'url': 'facebook.com'}
     for doc in db.all_docs():
         print doc
-
-    for data in account.all_dbs():
-        print data
-
-    print db['hello_world'].get().json()
+    print db['account_info'].get().json()
 
 
+def increment_rev(rev):
+    rev_split = rev.split("-")
+    return str(int(rev_split[0])+1) + "-" + rev_split[1]
 
 def send_poll_start(url, poll):
     payload = {
@@ -220,5 +238,6 @@ if __name__ == "__main__":
     except Exception as e:
             print "Failed to load the environment \n %s" % e
             sys.exit(2)
-    connect_to_db()
+    connect_to_cloudant()
+    test()
     app.run(host=env["HOST"], port=env["PORT"])
