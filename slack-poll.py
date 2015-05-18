@@ -32,8 +32,7 @@ def vote_command():
         command = requested.split(" ")
         slack_url = command[1]
         slack_token = command[2]
-        register(slack_url, slack_token)
-        return "You have successfully registered this slack account."
+        return register(slack_url, slack_token)
 
     if token not in env:
         return "This Slack Account hasn't been registered with the polling application.\n" \
@@ -124,32 +123,41 @@ def register(slack_url, slack_token):
     :param slack_token: The token for slash command used by the slack account
     """
     global cloudant_db
-    print slack_url
-    print slack_token
-    account = {slack_token: {'url': slack_url}}
-    db = cloudant_db.database(slack_token)
+    global env
+    db = cloudant_db.database("slackpoll_"+slack_token.lower())
     resp = db.put()
-    db['url'] = slack_url
     if resp.status_code == 412:
         return "This slack account is already registered."
     elif resp.status_code == 201:
-        return "This slack account has be successfully registered."
+        data = {'url': slack_url, 'token': slack_token}
+        db['account_info'] = data
+        env[slack_token] = data
+        return "This slack account has been successfully registered."
     else:
         return "Registration failed."
 
 
 
-def verify_token():
-    pass
+def load_tokens():
+    global cloudant_db
+    global env
+    for db_name in cloudant_db.all_dbs().json():
+        if "slackpoll" in db_name:
+            db = cloudant_db[db_name]
+            account_info = db["account_info"].get().json()
+            env[account_info["token"]] = account_info
 
 
 def connect_to_cloudant():
-    print os.getenv("VCAP_SERVICES")
+    """
+    Create a connection to the cloudant db service
+
+    Stores it as a global in cloudant_db
+    :return:
+    """
+    global cloudant_db
     cloudant_info_json = json.loads(os.getenv("VCAP_SERVICES"))
     credentials = cloudant_info_json["cloudantNoSQLDB"][0]["credentials"]
-
-    print credentials
-    global cloudant_db
     cloudant_db = cloudant.Account(credentials["username"])
 
     login = cloudant_db.login(credentials["username"], credentials["password"])
@@ -157,22 +165,19 @@ def connect_to_cloudant():
         return "Failed to connect to the Cloudant DB"
 
 
+
 def test():
     global cloudant_db
     db = cloudant_db.database("test")
     result = db.put()
     doc = db['account_info'].get().json()
-    print doc["_rev"]
-    print increment_rev(doc["_rev"])
-    db['account_info'] = {'url': 'facebook.com'}
+    db['account_info'].merge({'url': 'facebook.com'})
+    #db['account_info'] = {'url': 'facebook.com', "_rev": rev}
     for doc in db.all_docs():
         print doc
     print db['account_info'].get().json()
 
 
-def increment_rev(rev):
-    rev_split = rev.split("-")
-    return str(int(rev_split[0])+1) + "-" + rev_split[1]
 
 def send_poll_start(url, poll):
     payload = {
@@ -239,5 +244,6 @@ if __name__ == "__main__":
             print "Failed to load the environment \n %s" % e
             sys.exit(2)
     connect_to_cloudant()
-    test()
+    load_tokens()
+    print env
     app.run(host=env["HOST"], port=env["PORT"])
