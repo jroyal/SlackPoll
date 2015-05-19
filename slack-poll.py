@@ -1,3 +1,5 @@
+from operator import itemgetter
+
 __author__ = 'jhroyal'
 
 import json
@@ -39,52 +41,21 @@ def vote_command():
                "Please run `/poll register [incoming webhook url] [slash command token]`"
 
     try:
-        pm = env[token]
-
         requested = request.form["text"]
-        user = request.form["user_name"]
-        if "channel_id" in request.form:
-            channel = request.form["channel_id"]
-        else:
-            channel = request.form["channel_name"]
-        log.debug(channel)
         if "help" in requested:
             return "*Help for /poll*\n\n" \
                    "*Start a poll:* `/poll timeout 5 topic What's for lunch? options sushi --- pizza --- Anything but burgers`\n" \
                    "*End a poll:* `/poll close` (The original poll creator must run this)\n" \
                    "*Cast a Vote:* `/poll cast [option number]`\n" \
                    "*Get number of votes:* `/poll count`"
+        db = cloudant_db['slackpoll_'+token.lower()]
 
-        if "topic" in requested and "options" in requested:
-            log.info("Creating a new poll")
-            topic_match = re.search("topic (.+) options", requested)
-            if topic_match:
-                topic = topic_match.group(1)
-            else:
-                return "Malformed Request. Use `/poll help` to find out how to form the request."
-
-            options_match = re.search("options (.*)", requested)
-            if options_match:
-                options = [{"name": x.strip(), "count": 0} for x in options_match.group(1).split("---")]
-            else:
-                return "Malformed Request. Use `/poll help` to find out how to form the request."
-
-            timeout_match = re.search("timeout (\d*)", requested)
-            if timeout_match:
-                timeout = timeout_match.group(1)
-                poll = pm.create_poll(user, channel, topic, options, timeout)
-            else:
-                poll = pm.create_poll(user, channel, topic, options)
-
-            if poll:
-                send_poll_start(pm.url, poll)
-                log.info(pm)
-                return "Creating poll..."
-            else:
-                return "There is an active poll in this channel already!"
+        if "create" in requested and "options" in requested:
+            print "Creating a new poll"
+            return create_poll(db, request, env[token]["url"])
 
         elif "cast" in requested:
-            log.info("Casting a vote")
+            print "Casting a vote"
             vote = re.search('([0-9]+)', requested)
             if vote:
                 vote = vote.group(1)
@@ -100,15 +71,14 @@ def vote_command():
                 return "There is no current active poll!"
 
         elif "close" in requested:
-            output = pm.close_poll(user, channel)
-            return output
+            return close_poll(db, request, env[token]["url"])
 
         else:
             return "Unknown request recieved"
     except requests.exceptions.ReadTimeout:
         return "Request timed out :("
     except Exception as e:
-        log.error(traceback.format_exc())
+        print traceback.format_exc()
         if "SLACK_ERROR_CHANNEL" in env:
             send_message_to_admin(pm.url, env["SLACK_ERROR_CHANNEL"], user, requested, traceback.format_exc())
         return "Oh no! Something went wrong!"
@@ -139,6 +109,9 @@ def register(slack_url, slack_token):
 
 
 def load_tokens():
+    """
+    Loads all existing slack accounts into the env
+    """
     global cloudant_db
     global env
     for db_name in cloudant_db.all_dbs().json():
@@ -146,6 +119,56 @@ def load_tokens():
             db = cloudant_db[db_name]
             account_info = db["account_info"].get().json()
             env[account_info["token"]] = account_info
+
+
+def create_poll(db, slack_req, slack_url):
+    doc = db[slack_req.form["channel_name"]].get()
+    if doc.status_code == 200:
+        return "There is an active poll in this channel already!"
+
+    cmd_txt = slack_req.form['text']
+    question_match = re.search("create (.+) options", cmd_txt)
+    if question_match:
+        question = question_match.group(1)
+    else:
+        return "Malformed Request. Use `/poll help` to find out how to form the request."
+
+    options_match = re.search("options (.*)", cmd_txt)
+    if options_match:
+        options = [{"name": x.strip(), "count": 0} for x in options_match.group(1).split("---")]
+    else:
+        return "Malformed Request. Use `/poll help` to find out how to form the request."
+
+    timeout_match = re.search("timeout (\d*)", cmd_txt)
+    if timeout_match:
+        timeout = timeout_match.group(1)
+
+    poll = {
+        'channel': slack_req.form['channel_name'],
+        'creator': slack_req.form['user_name'],
+        'votes': {},
+        'options': options,
+        'question': question
+    }
+    db[slack_req.form["channel_name"]] = poll
+    send_poll_start(slack_url, poll)
+    return "Creating your poll..."
+
+
+def close_poll(db, slack_req, slack_url):
+    doc = db[slack_req.form["channel_name"]]
+    doc_resp = doc.get()
+    if doc_resp.status_code == 404:
+        return "There is no active poll in this channel currently."
+    poll = doc_resp.json()
+
+    if slack_req.form['user_name'] != poll["creator"]:
+        return "Sorry! Only the poll creator can close the poll."
+
+    send_poll_close(slack_url, poll)
+    doc.delete(poll['_rev']).raise_for_status()
+    return "Closing your poll"
+
 
 
 def connect_to_cloudant():
@@ -178,28 +201,55 @@ def test():
     print db['account_info'].get().json()
 
 
+def send_poll_close(url, poll):
+        payload = {
+            "channel": "#%s" % poll['channel'],
+            "text": "@%s closed their poll!" % poll['creator'],
+            "link_names": 1,
+            "attachments": [
+                {
+                    "fallback": "@%s closed their poll!" % poll['creator'],
+
+                    "color": "danger",
+                    "mrkdwn_in": ["fields", "text"],
+                    "fields": [
+                        {
+                            "title": poll['question'],
+                            "value": ""
+                        }
+                    ]
+                }
+            ]
+        }
+        sort = sorted(poll['options'], key=itemgetter('count'), reverse=True)
+        for option in sort:
+            payload["attachments"][0]["fields"][0]["value"] += ">*%s* received %s votes.\n" % \
+                                                               (option["name"], option["count"])
+
+        print "Sending an update to slack"
+        requests.post(url, data=json.dumps(payload))
 
 def send_poll_start(url, poll):
     payload = {
-        "channel": poll.channel,
-        "text": "@%s created a new poll! Vote in it!" % poll.original_user,
+        "channel": "#%s" % poll['channel'],
+        "text": "@%s created a new poll! Vote in it!" % poll['creator'],
         "link_names": 1,
         "attachments": [
             {
-                "fallback": "@%s created a new poll! Vote in it!" % poll.original_user,
+                "fallback": "@%s created a new poll! Vote in it!" % poll['creator'],
 
                 "color": "good",
                 "mrkdwn_in": ["fields", "text"],
                 "fields": [
                     {
-                        "title": poll.topic,
+                        "title": poll['question'],
                         "value": ""
                     }
                 ]
             }
         ]
     }
-    for index, option in enumerate(poll.options):
+    for index, option in enumerate(poll['options']):
         payload["attachments"][0]["fields"][0]["value"] += "><%s> %s\n" % (index + 1, option["name"])
 
     payload["attachments"][0]["fields"][0]["value"] += "\n\nHow do I vote? `/poll cast [option number]`"
@@ -245,5 +295,4 @@ if __name__ == "__main__":
             sys.exit(2)
     connect_to_cloudant()
     load_tokens()
-    print env
     app.run(host=env["HOST"], port=env["PORT"])
