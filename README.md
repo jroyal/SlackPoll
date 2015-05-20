@@ -12,7 +12,7 @@ Add a basic polling integration to slack channels. It currently allows for one p
 | `/poll count` | Get the total number of votes cast so far | 
 | `/poll close` | Close a poll and get the results |
 
----
+--
 
 ### Start a poll
 
@@ -43,5 +43,15 @@ If you would like to see how many votes there have been in the current poll just
 Closing a poll is simple but it is limited to the person that started the poll. To close a poll simply run `/poll close` in the channel that you started your poll in. The results of your poll will then be posted with 
 
 ![Closing Poll](screenshots/closedpoll.PNG "Closing Poll")
+
+
+---
+
+### Installation Instructions
+
+Click on the button to deploy the application in Bluemix. This will create an application and a cloudant cluster that the application will connect to. 
+
+
+[![Deploy to Bluemix](https://bluemix.net/deploy/button.png)](https://bluemix.net/deploy?repository=https://github.com/jroyal/SlackPoll/)
 
 
