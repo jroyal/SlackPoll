@@ -1,15 +1,26 @@
 # SlackPoll
 Add a basic polling integration to slack channels. It currently allows for one poll per channel at a given time. You can configure it with a timeout to close a poll after a certain amount of time.
 
+--- 
+
+### Command quick reference
+
+| *Command*   | *Description* |
+|------------|-----------------|
+| `/poll create [question] options [options]` |  Create a poll in the channel. Delineated by a triple dash |
+| `/poll cast [option number]` | Cast a vote for a specific option | 
+| `/poll count` | Get the total number of votes cast so far | 
+| `/poll close` | Close a poll and get the results |
+
+---
+
 ### Start a poll
 
-The basic syntax is `/poll timeout [time in minutes] topic [Question] options [options]`, where the timeout is an optional field and the options are delineated by a triple dash `---`. During poll creation the person who started the poll is identified, so if you would like to start a new poll contact the other user and get them to close theirs.
+The basic syntax is `/poll create [Question] options [options]`, where the timeout is an optional field and the options are delineated by a triple dash `---`. During poll creation the person who started the poll is identified, so if you would like to start a new poll contact the other user and get them to close theirs.
 
-An example of asking the team what you should do for lunch could be like this. This poll would be open for 5 minutes.
+An example of asking the team what you should do for lunch could be like this.
 
-`/poll timeout 5 topic What should we get for lunch? options Burgers --- Pizza --- Seafood`
-
-![Initial Poll Command](screenshots/startpolltext.PNG "Initial Poll Command")
+`/poll create What should we get for lunch? options Burgers --- Pizza --- Seafood`
 
 ![Initial Poll](screenshots/initialpoll.PNG "Initial Poll")
 
