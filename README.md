@@ -1,5 +1,5 @@
 # SlackPoll
-Add a basic polling integration to slack channels. It currently allows for one poll per channel at a given time. You can configure it with a timeout to close a poll after a certain amount of time.
+Add a basic polling integration to slack channels. It currently allows for one poll per channel at a given time.
 
 --- 
 
