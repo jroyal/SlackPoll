@@ -54,4 +54,10 @@ Click on the button to deploy the application in Bluemix. This will create an ap
 
 [![Deploy to Bluemix](https://bluemix.net/deploy/button.png)](https://bluemix.net/deploy?repository=https://github.com/jroyal/SlackPoll/)
 
+Once you have the application up and running in bluemix, you will need to add two slack integrations. One slash command and one incoming webhook. 
 
+Point the slash command to the URL provided by the bluemix application, and copy down the token. Grab the incoming webhook url from it's integration. 
+
+Run `/poll register [incoming-webhook-url] [slash-command-token]` in your slack channel to register your slack account with the application.
+
+You should be good to go at that point :)
