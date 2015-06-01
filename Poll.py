@@ -1,5 +1,6 @@
 from operator import itemgetter
 import re
+from threading import Timer
 import requests
 
 __author__ = 'jhroyal'
@@ -91,10 +92,6 @@ def create(token, slack_req, slack_url):
     else:
         return "Malformed Request. Use `/poll help` to find out how to form the request."
 
-    timeout_match = re.search("timeout (\d*)", cmd_txt)
-    if timeout_match:
-        timeout = timeout_match.group(1)
-
     poll = {
         'channel': slack_req.form['channel_name'],
         'creator': slack_req.form['user_name'],
@@ -105,8 +102,40 @@ def create(token, slack_req, slack_url):
     }
     db[slack_req.form["channel_name"]] = poll
     send_poll_start(slack_url, poll)
+    update_usage_stats(token, slack_req.form['user_name'], slack_req.form['channel_name'])
     return "Creating your poll..."
 
+def update_usage_stats(token, user, channel):
+    """
+    Update the db that keeps track of usage statistics
+
+    :param token: The token used to represent the slack account
+    :param user: The user creating a poll
+    :param channel: The channel the poll is being created in
+    :return:
+    """
+    global cloudant_db
+    usage_stats = {}
+    db = cloudant_db['slackpoll_'+token.lower()]
+    doc = db["usage_stats"].get()
+    if doc.status_code == 404:
+        usage_stats["total_poll_count"] = 1
+        usage_stats["channel"] = {channel: 1}
+        usage_stats["users"] = {user: 1}
+        db["usage_stats"] = usage_stats
+    else:
+        usage_stats = doc.json()
+        usage_stats["total_poll_count"] += 1
+        if channel in usage_stats["channel"]:
+            usage_stats["channel"][channel] += 1
+        else:
+            usage_stats["channel"][channel] = 1
+        if user in usage_stats["users"]:
+            usage_stats["users"][user] += 1
+        else:
+            usage_stats["users"][user] = 1
+        db["usage_stats"].merge(usage_stats)
+    return "Working on update_usage_stats"
 
 def cast(token, slack_req):
     """
