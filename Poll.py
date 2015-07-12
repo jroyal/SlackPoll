@@ -108,7 +108,7 @@ def create(token, slack_req):
         'vote_count': 0
     }
     polls.insert_one(poll)
-    #send_poll_start(slack_url, poll)
+    send_poll_start(polls.find_one({"token": token})['url'], poll)
     #update_usage_stats(token, slack_req.form['user_name'], slack_req.form['channel_name'])
     return "Creating your poll..."
 
@@ -206,7 +206,7 @@ def count(token, slack_req):
         return "There is no current active poll!"
 
 
-def close(token, slack_req, slack_url):
+def close(token, slack_req):
     """
     Close a poll
 
@@ -215,19 +215,19 @@ def close(token, slack_req, slack_url):
     :param slack_url: The URL to send the poll too
     :return: String representing outcome
     """
-    global cloudant_db
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]]
-    doc_resp = doc.get()
-    if doc_resp.status_code == 404:
+    db = connect_to_mongo()
+    polls = db[token]
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+    if poll is None:
         return "There is no active poll in this channel currently."
-    poll = doc_resp.json()
 
     if slack_req.form['user_name'] != poll["creator"]:
         return "Sorry! Only the poll creator can close the poll."
 
-    send_poll_close(slack_url, poll)
-    doc.delete(poll['_rev']).raise_for_status()
+    send_poll_close(polls.find_one({"token": token})['url'], poll)
+    delete = polls.delete_one({"channel": slack_req.form['channel_name'], "creator": slack_req.form['user_name']})
+    if delete.deleted_count == 0:
+        return "Failed to close your poll..."
     return "Closing your poll"
 
 

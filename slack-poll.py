@@ -53,7 +53,7 @@ def vote_command():
 
         elif "close" in requested:
             print "Closing a poll"
-            return poll.close(token, request, env[token]["url"])
+            return Poll.close(token, request)
 
         else:
             return "Unknown request recieved"
