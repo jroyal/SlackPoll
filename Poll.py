@@ -1,6 +1,7 @@
 from operator import itemgetter
 import re
 from threading import Timer
+import exceptions
 import requests
 
 __author__ = 'jhroyal'
@@ -68,7 +69,7 @@ def validate_token(slack_token):
         return False
 
 
-def create(token, slack_req, slack_url):
+def create(token, slack_req):
     """
     Create a poll
 
@@ -77,10 +78,12 @@ def create(token, slack_req, slack_url):
     :param slack_url: The URL to send the poll too
     :return: String representing outcome
     """
-    global cloudant_db
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]].get()
-    if doc.status_code == 200:
+    db = connect_to_mongo()
+    polls = db[token]
+    print polls.find_one({"token": token})
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+
+    if poll is not None:
         return "There is an active poll in this channel already!"
 
     cmd_txt = slack_req.form['text']
@@ -104,9 +107,9 @@ def create(token, slack_req, slack_url):
         'question': question,
         'vote_count': 0
     }
-    db[slack_req.form["channel_name"]] = poll
-    send_poll_start(slack_url, poll)
-    update_usage_stats(token, slack_req.form['user_name'], slack_req.form['channel_name'])
+    polls.insert_one(poll)
+    #send_poll_start(slack_url, poll)
+    #update_usage_stats(token, slack_req.form['user_name'], slack_req.form['channel_name'])
     return "Creating your poll..."
 
 def update_usage_stats(token, user, channel):

@@ -41,7 +41,7 @@ def vote_command():
 
         if "create" in requested and "options" in requested:
             print "Creating a new poll"
-            return poll.create(token, request, env[token]["url"])
+            return Poll.create(token, request)
 
         elif "cast" in requested:
             print "Casting a vote"
