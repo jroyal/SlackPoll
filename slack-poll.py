@@ -45,11 +45,11 @@ def vote_command():
 
         elif "cast" in requested:
             print "Casting a vote"
-            return poll.cast(token, request)
+            return Poll.cast(token, request)
 
         elif "count" in requested:
             print "Getting vote count"
-            return poll.count(token, request)
+            return Poll.count(token, request)
 
         elif "close" in requested:
             print "Closing a poll"

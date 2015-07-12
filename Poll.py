@@ -80,7 +80,6 @@ def create(token, slack_req):
     """
     db = connect_to_mongo()
     polls = db[token]
-    print polls.find_one({"token": token})
     poll = polls.find_one({"channel": slack_req.form['channel_name']})
 
     if poll is not None:
@@ -152,17 +151,18 @@ def cast(token, slack_req):
     :param slack_req: The request object from slack
     :return: String representing outcome
     """
-    global cloudant_db
+    db = connect_to_mongo()
+    polls = db[token]
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+
+    if poll is None:
+        return "There is no active poll in this channel currently."
+
     vote = re.search('([0-9]+)', slack_req.form["text"])
     if vote:
         vote = int(vote.group(1))
-
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]]
-    doc_resp = doc.get()
-    if doc_resp.status_code == 404:
-        return "There is no active poll in this channel currently."
-    poll = doc_resp.json()
+    else:
+        return "Invalid vote. Please use option number."
 
     key = vote - 1
     if key < 0 or key >= len(poll['options']):
