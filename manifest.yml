@@ -1,9 +1,0 @@
----
-applications:
-- name: slack-poll-test
-  memory: 256M
-  host: slackpoll-test
-  timeout: 60
-  services:
-  - cloudant-slackpoll
-

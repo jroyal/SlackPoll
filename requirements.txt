@@ -1,4 +1,4 @@
-Flask==0.10.1
+flask==0.10.1
 PyYAML==3.11
 requests==2.5.3
 cloudant==0.5.9

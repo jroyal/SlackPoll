@@ -7,23 +7,35 @@ __author__ = 'jhroyal'
 import cloudant
 import json
 import os
+from pymongo import MongoClient
 
 
-def connect_to_cloudant():
+def test_mongo_connection():
     """
-    Create a connection to the cloudant db service
+    Create a connection to the mongo db container
 
-    Stores it as a global in cloudant_db
+    Stores it as a global in mongodb
     """
-    global cloudant_db
-    cloudant_info_json = json.loads(os.getenv("VCAP_SERVICES"))
-    credentials = cloudant_info_json["cloudantNoSQLDB"][0]["credentials"]
-    cloudant_db = cloudant.Account(credentials["username"])
+    global mongodb
+    print "Testing MONGODB"
+    mongodb = MongoClient('mongo-db', 27017)
+    db = mongodb.slackpoll
+    print db.collection_names()
+    print db["tvAMUXMqT0XeGdhgQ86S9eMD"].find_one()
 
-    login = cloudant_db.login(credentials["username"], credentials["password"])
-    if login.status_code != 200:
-        return "Failed to connect to the cloudant."
-    return "Connected to cloudant successfully!"
+
+def connect_to_mongo():
+    """
+    Create a connection to the mongodb container
+
+    :return: The slackpoll database object
+    """
+    try:
+        mongodb = MongoClient('mongo-db', 27017)
+    except MongoClient.errors.ConnectionFailure:
+        return "Failed to connect to the mongo database!"
+    db = mongodb.slackpoll
+    return db
 
 
 def register_slack_account(slack_url, slack_token):
@@ -34,34 +46,26 @@ def register_slack_account(slack_url, slack_token):
     :param slack_url: The URL for the incoming web hook for the slack account
     :param slack_token: The token for slash command used by the slack account
     """
-    global cloudant_db
-    db = cloudant_db.database("slackpoll_"+slack_token.lower())
-    resp = db.put()
-    if resp.status_code == 412:
+    db = connect_to_mongo()
+    if slack_token in db.collection_names():
         return "This slack account is already registered."
-    elif resp.status_code == 201:
-        data = {'url': slack_url, 'token': slack_token}
-        db['account_info'] = data
-        return "This slack account has been successfully registered."
+    data = {'url': slack_url, 'token': slack_token}
+    db[slack_token].insert_one(data)
+    return "This slack account has been successfully registered."
+
+
+def validate_token(slack_token):
+    """
+    Verifies that we know about this token
+
+    :param slack_token: The incoming slack token
+    :return: True if we have registered the token, false otherwise
+    """
+    db = connect_to_mongo()
+    if slack_token in db.collection_names():
+        return True
     else:
-        return "Registration failed."
-
-
-def load_tokens():
-    """
-    Collects all of the data needed to connect to the slack accounts
-    registered with this slack poll
-
-    :returns dictionary where key = token; val = account data
-    """
-    global cloudant_db
-    tokens = {}
-    for db_name in cloudant_db.all_dbs().json():
-        if "slackpoll" in db_name:
-            db = cloudant_db[db_name]
-            account_info = db["account_info"].get().json()
-            tokens[account_info["token"]] = account_info
-    return tokens
+        return False
 
 
 def create(token, slack_req, slack_url):
