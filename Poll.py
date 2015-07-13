@@ -1,29 +1,26 @@
 from operator import itemgetter
 import re
 from threading import Timer
+import exceptions
 import requests
 
 __author__ = 'jhroyal'
-import cloudant
 import json
-import os
+from pymongo import MongoClient
 
 
-def connect_to_cloudant():
+def connect_to_mongo():
     """
-    Create a connection to the cloudant db service
+    Create a connection to the mongodb container
 
-    Stores it as a global in cloudant_db
+    :return: The slackpoll database object
     """
-    global cloudant_db
-    cloudant_info_json = json.loads(os.getenv("VCAP_SERVICES"))
-    credentials = cloudant_info_json["cloudantNoSQLDB"][0]["credentials"]
-    cloudant_db = cloudant.Account(credentials["username"])
-
-    login = cloudant_db.login(credentials["username"], credentials["password"])
-    if login.status_code != 200:
-        return "Failed to connect to the cloudant."
-    return "Connected to cloudant successfully!"
+    try:
+        mongodb = MongoClient('mongo-db', 27017)
+    except MongoClient.errors.ConnectionFailure:
+        return "Failed to connect to the mongo database!"
+    db = mongodb.slackpoll
+    return db
 
 
 def register_slack_account(slack_url, slack_token):
@@ -34,37 +31,29 @@ def register_slack_account(slack_url, slack_token):
     :param slack_url: The URL for the incoming web hook for the slack account
     :param slack_token: The token for slash command used by the slack account
     """
-    global cloudant_db
-    db = cloudant_db.database("slackpoll_"+slack_token.lower())
-    resp = db.put()
-    if resp.status_code == 412:
+    db = connect_to_mongo()
+    if slack_token in db.collection_names():
         return "This slack account is already registered."
-    elif resp.status_code == 201:
-        data = {'url': slack_url, 'token': slack_token}
-        db['account_info'] = data
-        return "This slack account has been successfully registered."
+    data = {'url': slack_url, 'token': slack_token}
+    db[slack_token].insert_one(data)
+    return "This slack account has been successfully registered."
+
+
+def validate_token(slack_token):
+    """
+    Verifies that we know about this token
+
+    :param slack_token: The incoming slack token
+    :return: True if we have registered the token, false otherwise
+    """
+    db = connect_to_mongo()
+    if slack_token in db.collection_names():
+        return True
     else:
-        return "Registration failed."
+        return False
 
 
-def load_tokens():
-    """
-    Collects all of the data needed to connect to the slack accounts
-    registered with this slack poll
-
-    :returns dictionary where key = token; val = account data
-    """
-    global cloudant_db
-    tokens = {}
-    for db_name in cloudant_db.all_dbs().json():
-        if "slackpoll" in db_name:
-            db = cloudant_db[db_name]
-            account_info = db["account_info"].get().json()
-            tokens[account_info["token"]] = account_info
-    return tokens
-
-
-def create(token, slack_req, slack_url):
+def create(token, slack_req):
     """
     Create a poll
 
@@ -73,10 +62,11 @@ def create(token, slack_req, slack_url):
     :param slack_url: The URL to send the poll too
     :return: String representing outcome
     """
-    global cloudant_db
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]].get()
-    if doc.status_code == 200:
+    db = connect_to_mongo()
+    polls = db[token]
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+
+    if poll is not None:
         return "There is an active poll in this channel already!"
 
     cmd_txt = slack_req.form['text']
@@ -100,42 +90,10 @@ def create(token, slack_req, slack_url):
         'question': question,
         'vote_count': 0
     }
-    db[slack_req.form["channel_name"]] = poll
-    send_poll_start(slack_url, poll)
-    update_usage_stats(token, slack_req.form['user_name'], slack_req.form['channel_name'])
+    polls.insert_one(poll)
+    send_poll_start(polls.find_one({"token": token})['url'], poll)
     return "Creating your poll..."
 
-def update_usage_stats(token, user, channel):
-    """
-    Update the db that keeps track of usage statistics
-
-    :param token: The token used to represent the slack account
-    :param user: The user creating a poll
-    :param channel: The channel the poll is being created in
-    :return:
-    """
-    global cloudant_db
-    usage_stats = {}
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db["usage_stats"].get()
-    if doc.status_code == 404:
-        usage_stats["total_poll_count"] = 1
-        usage_stats["channel"] = {channel: 1}
-        usage_stats["users"] = {user: 1}
-        db["usage_stats"] = usage_stats
-    else:
-        usage_stats = doc.json()
-        usage_stats["total_poll_count"] += 1
-        if channel in usage_stats["channel"]:
-            usage_stats["channel"][channel] += 1
-        else:
-            usage_stats["channel"][channel] = 1
-        if user in usage_stats["users"]:
-            usage_stats["users"][user] += 1
-        else:
-            usage_stats["users"][user] = 1
-        db["usage_stats"].merge(usage_stats)
-    return "Working on update_usage_stats"
 
 def cast(token, slack_req):
     """
@@ -145,17 +103,18 @@ def cast(token, slack_req):
     :param slack_req: The request object from slack
     :return: String representing outcome
     """
-    global cloudant_db
+    db = connect_to_mongo()
+    polls = db[token]
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+
+    if poll is None:
+        return "There is no active poll in this channel currently."
+
     vote = re.search('([0-9]+)', slack_req.form["text"])
     if vote:
         vote = int(vote.group(1))
-
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]]
-    doc_resp = doc.get()
-    if doc_resp.status_code == 404:
-        return "There is no active poll in this channel currently."
-    poll = doc_resp.json()
+    else:
+        return "Invalid vote. Please use option number."
 
     key = vote - 1
     if key < 0 or key >= len(poll['options']):
@@ -163,15 +122,13 @@ def cast(token, slack_req):
 
     user = slack_req.form["user_name"]
     if user in poll["votes"]:
+        # user has already voted so remove their old vote tallies
         original_vote = poll["votes"][user]
-        poll['options'][original_vote]["count"] -= 1
-        poll["vote_count"] -= 1
-
-    poll["votes"][user] = key
-    poll['options'][key]["count"] += 1
-    poll["vote_count"] += 1
-
-    doc.merge(poll)
+        polls.update_one({"channel": slack_req.form['channel_name']},
+                         {"$inc": {"vote_count": -1, "options."+str(original_vote)+".count": -1}})
+    polls.update_one({"channel": slack_req.form['channel_name']},
+                     {"$inc": {"vote_count": 1, "options."+str(key)+".count": 1},
+                      "$set": {"votes."+user: key}})
     return "Vote received. Thank you!"
 
 
@@ -183,12 +140,12 @@ def count(token, slack_req):
     :param slack_req: The request object from slack
     :return: String representing outcome
     """
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]]
-    doc_resp = doc.get()
-    if doc_resp.status_code == 404:
+    db = connect_to_mongo()
+    polls = db[token]
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+
+    if poll is None:
         return "There is no active poll in this channel currently."
-    poll = doc_resp.json()
     num_of_votes = poll["vote_count"]
 
     if num_of_votes:
@@ -199,28 +156,27 @@ def count(token, slack_req):
         return "There is no current active poll!"
 
 
-def close(token, slack_req, slack_url):
+def close(token, slack_req):
     """
     Close a poll
 
     :param token: The token used to represent the slack account
     :param slack_req: The request object from slack
-    :param slack_url: The URL to send the poll too
     :return: String representing outcome
     """
-    global cloudant_db
-    db = cloudant_db['slackpoll_'+token.lower()]
-    doc = db[slack_req.form["channel_name"]]
-    doc_resp = doc.get()
-    if doc_resp.status_code == 404:
+    db = connect_to_mongo()
+    polls = db[token]
+    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+    if poll is None:
         return "There is no active poll in this channel currently."
-    poll = doc_resp.json()
 
     if slack_req.form['user_name'] != poll["creator"]:
         return "Sorry! Only the poll creator can close the poll."
 
-    send_poll_close(slack_url, poll)
-    doc.delete(poll['_rev']).raise_for_status()
+    send_poll_close(polls.find_one({"token": token})['url'], poll)
+    delete = polls.delete_one({"channel": slack_req.form['channel_name'], "creator": slack_req.form['user_name']})
+    if delete.deleted_count == 0:
+        return "Failed to close your poll..."
     return "Closing your poll"
 
 

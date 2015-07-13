@@ -49,14 +49,15 @@ Closing a poll is simple but it is limited to the person that started the poll. 
 
 ### Installation Instructions
 
-Click on the button to deploy the application in Bluemix. This will create an application and a cloudant cluster that the application will connect to. 
+I have a docker compose file to use for installing the application and mongodb. 
 
+`git clone https://github.com/jroyal/SlackPoll.git`  
+`cd SlackPoll`  
+`docker-compose up -d`
 
-[![Deploy to Bluemix](https://bluemix.net/deploy/button.png)](https://bluemix.net/deploy?repository=https://github.com/jroyal/SlackPoll/)
+Once you have the application up and running, you will need to add two slack integrations. One slash command and one incoming webhook. 
 
-Once you have the application up and running in bluemix, you will need to add two slack integrations. One slash command and one incoming webhook. 
-
-Point the slash command to the URL provided by the bluemix application, and copy down the token. Grab the incoming webhook url from it's integration. 
+Point the slash command to the ip of your instance running docker and use port 8090. Copy down the token provided by the slash command and copy the incoming webhook url from it's integration. 
 
 Run `/poll register [incoming-webhook-url] [slash-command-token]` in your slack channel to register your slack account with the application.
 

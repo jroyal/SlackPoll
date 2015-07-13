@@ -1,15 +1,10 @@
 __author__ = 'jhroyal'
 
-import sys
-import os
 import traceback
 import requests
 from flask import Flask
 from flask import request
-
-import poll
-
-
+import Poll
 
 app = Flask(__name__)
 
@@ -17,22 +12,19 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST'])
 def vote_command():
     if request.method == "GET":
-        return "The voting machine is up and running"
+        return "The voting machine is up and running."
 
     token = request.form["token"]
     requested = request.form["text"]
 
     if "register" in requested:
-        if token in env:
-            return "This slack account has already been registered by this application."
         command = requested.split(" ")
         slack_url = command[1]
         slack_token = command[2]
-        result = poll.register_slack_account(slack_url, slack_token)
-        env.update(poll.load_tokens())
+        result = Poll.register_slack_account(slack_url, slack_token)
         return result
 
-    if token not in env:
+    if not Poll.validate_token(token):
         return "This Slack Account hasn't been registered with the polling application.\n" \
                "Please run `/poll register [incoming webhook url] [slash command token]`"
 
@@ -47,19 +39,19 @@ def vote_command():
 
         if "create" in requested and "options" in requested:
             print "Creating a new poll"
-            return poll.create(token, request, env[token]["url"])
+            return Poll.create(token, request)
 
         elif "cast" in requested:
             print "Casting a vote"
-            return poll.cast(token, request)
+            return Poll.cast(token, request)
 
         elif "count" in requested:
             print "Getting vote count"
-            return poll.count(token, request)
+            return Poll.count(token, request)
 
         elif "close" in requested:
             print "Closing a poll"
-            return poll.close(token, request, env[token]["url"])
+            return Poll.close(token, request)
 
         else:
             return "Unknown request recieved"
@@ -71,18 +63,4 @@ def vote_command():
 
 
 if __name__ == "__main__":
-    global env
-    env = dict()
-    try:
-        if len(sys.argv) > 1 and sys.argv[1] == "local":
-            env["HOST"] = 'localhost'
-            env["PORT"] = 5000
-        else:
-            env["HOST"] = '0.0.0.0'
-            env["PORT"] = os.getenv('VCAP_APP_PORT', '5000')
-    except Exception as e:
-            print "Failed to load the environment \n %s" % e
-            sys.exit(2)
-    poll.connect_to_cloudant()
-    env.update(poll.load_tokens())
-    app.run(host=env["HOST"], port=env["PORT"])
+    app.run(host="0.0.0.0", port=5000)
