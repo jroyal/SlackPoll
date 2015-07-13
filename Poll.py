@@ -64,7 +64,7 @@ def create(token, slack_req):
     """
     db = connect_to_mongo()
     polls = db[token]
-    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+    poll = polls.find_one({"channel": slack_req.form['channel_id']})
 
     if poll is not None:
         return "There is an active poll in this channel already!"
@@ -83,7 +83,7 @@ def create(token, slack_req):
         return "Malformed Request. Use `/poll help` to find out how to form the request."
 
     poll = {
-        'channel': slack_req.form['channel_name'],
+        'channel': slack_req.form['channel_id'],
         'creator': slack_req.form['user_name'],
         'votes': {},
         'options': options,
@@ -105,7 +105,7 @@ def cast(token, slack_req):
     """
     db = connect_to_mongo()
     polls = db[token]
-    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+    poll = polls.find_one({"channel": slack_req.form['channel_id']})
 
     if poll is None:
         return "There is no active poll in this channel currently."
@@ -124,9 +124,9 @@ def cast(token, slack_req):
     if user in poll["votes"]:
         # user has already voted so remove their old vote tallies
         original_vote = poll["votes"][user]
-        polls.update_one({"channel": slack_req.form['channel_name']},
+        polls.update_one({"channel": slack_req.form['channel_id']},
                          {"$inc": {"vote_count": -1, "options."+str(original_vote)+".count": -1}})
-    polls.update_one({"channel": slack_req.form['channel_name']},
+    polls.update_one({"channel": slack_req.form['channel_id']},
                      {"$inc": {"vote_count": 1, "options."+str(key)+".count": 1},
                       "$set": {"votes."+user: key}})
     return "Vote received. Thank you!"
@@ -142,7 +142,7 @@ def count(token, slack_req):
     """
     db = connect_to_mongo()
     polls = db[token]
-    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+    poll = polls.find_one({"channel": slack_req.form['channel_id']})
 
     if poll is None:
         return "There is no active poll in this channel currently."
@@ -166,7 +166,7 @@ def close(token, slack_req):
     """
     db = connect_to_mongo()
     polls = db[token]
-    poll = polls.find_one({"channel": slack_req.form['channel_name']})
+    poll = polls.find_one({"channel": slack_req.form['channel_id']})
     if poll is None:
         return "There is no active poll in this channel currently."
 
@@ -174,7 +174,7 @@ def close(token, slack_req):
         return "Sorry! Only the poll creator can close the poll."
 
     send_poll_close(polls.find_one({"token": token})['url'], poll)
-    delete = polls.delete_one({"channel": slack_req.form['channel_name'], "creator": slack_req.form['user_name']})
+    delete = polls.delete_one({"channel": slack_req.form['channel_id'], "creator": slack_req.form['user_name']})
     if delete.deleted_count == 0:
         return "Failed to close your poll..."
     return "Closing your poll"
@@ -189,7 +189,7 @@ def send_poll_start(url, poll):
     :return: None
     """
     payload = {
-        "channel": "#%s" % poll['channel'],
+        "channel": "%s" % poll['channel'],
         "text": "@%s created a new poll! Vote in it!" % poll['creator'],
         "link_names": 1,
         "attachments": [
@@ -224,7 +224,7 @@ def send_poll_close(url, poll):
     :return: None
     """
     payload = {
-        "channel": "#%s" % poll['channel'],
+        "channel": "%s" % poll['channel'],
         "text": "@%s closed their poll!" % poll['creator'],
         "link_names": 1,
         "attachments": [
