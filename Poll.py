@@ -16,7 +16,7 @@ def connect_to_mongo():
     :return: The slackpoll database object
     """
     try:
-        mongodb = MongoClient('mongo-db', 27017)
+        mongodb = MongoClient('pollingdb', 27017)
     except MongoClient.errors.ConnectionFailure:
         return "Failed to connect to the mongo database!"
     db = mongodb.slackpoll

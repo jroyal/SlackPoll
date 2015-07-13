@@ -16,6 +16,7 @@ def vote_command():
 
     token = request.form["token"]
     requested = request.form["text"]
+    print requested
 
     if "register" in requested:
         command = requested.split(" ")

@@ -5,7 +5,7 @@ pollingservice:
   volumes:
    - .:/code
   links:
-   - db
-db:
+   - pollingdb
+pollingdb:
   image: mongo
   command: --smallfiles
