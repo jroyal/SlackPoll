@@ -12,9 +12,7 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST'])
 def vote_command():
     if request.method == "GET":
-        print "Received a request"
-        Poll.test_mongo_connection()
-        return "The voting machine is up and running JAMES BLAH BLAH TEST"
+        return "The voting machine is up and running."
 
     token = request.form["token"]
     requested = request.form["text"]

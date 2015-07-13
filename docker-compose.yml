@@ -1,0 +1,11 @@
+pollingservice:
+  build: .
+  ports:
+   - "8090:5000"
+  volumes:
+   - .:/code
+  links:
+   - db
+db:
+  image: mongo
+  command: --smallfiles
