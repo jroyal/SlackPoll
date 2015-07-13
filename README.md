@@ -52,6 +52,7 @@ Closing a poll is simple but it is limited to the person that started the poll. 
 I have a docker compose file to use for installing the application and mongodb. 
 
 `git clone https://github.com/jroyal/SlackPoll.git`  
+`cd SlackPoll`  
 `docker-compose up -d`
 
 Once you have the application up and running, you will need to add two slack integrations. One slash command and one incoming webhook. 
